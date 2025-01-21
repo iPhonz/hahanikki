@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 class SnakeGame extends StatefulWidget {
+  const SnakeGame({Key? key}) : super(key: key);
+
   @override
   _SnakeGameState createState() => _SnakeGameState();
 }
@@ -15,6 +17,9 @@ class _SnakeGameState extends State<SnakeGame> {
   var direction = 'down';
   bool gameOver = false;
   int score = 0;
+  bool isPaused = false;
+  int highScore = 0;
+  Timer? gameTimer;
 
   @override
   void initState() {
@@ -22,14 +27,23 @@ class _SnakeGameState extends State<SnakeGame> {
     startGame();
   }
 
+  @override
+  void dispose() {
+    gameTimer?.cancel();
+    super.dispose();
+  }
+
   void startGame() {
     snakePosition = [45, 65, 85, 105, 125];
-    const duration = const Duration(milliseconds: 300);
-    Timer.periodic(duration, (Timer timer) {
-      updateSnake();
-      if (gameOver) {
-        timer.cancel();
-        _showGameOverDialog();
+    const duration = Duration(milliseconds: 300);
+    gameTimer?.cancel();
+    gameTimer = Timer.periodic(duration, (Timer timer) {
+      if (!isPaused) {
+        updateSnake();
+        if (gameOver) {
+          timer.cancel();
+          _showGameOverDialog();
+        }
       }
     });
   }
@@ -69,6 +83,9 @@ class _SnakeGameState extends State<SnakeGame> {
 
       if (snakePosition.last == food) {
         score += 1;
+        if (score > highScore) {
+          highScore = score;
+        }
         food = randomNumber.nextInt(700);
       } else {
         snakePosition.removeAt(0);
@@ -87,16 +104,23 @@ class _SnakeGameState extends State<SnakeGame> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Game Over'),
-          content: Text('Score: $score'),
+          title: const Text('Game Over'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Score: $score'),
+              Text('High Score: $highScore'),
+            ],
+          ),
           actions: <Widget>[
             TextButton(
-              child: Text('Play Again'),
+              child: const Text('Play Again'),
               onPressed: () {
                 setState(() {
                   gameOver = false;
                   score = 0;
                   direction = 'down';
+                  isPaused = false;
                 });
                 Navigator.of(context).pop();
                 startGame();
@@ -112,35 +136,59 @@ class _SnakeGameState extends State<SnakeGame> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Score: $score'),
+            Text('High Score: $highScore'),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+            onPressed: () {
+              setState(() {
+                isPaused = !isPaused;
+              });
+            },
+          ),
+        ],
+      ),
       body: Column(
         children: <Widget>[
           Expanded(
             child: GestureDetector(
               onVerticalDragUpdate: (details) {
-                if (direction != 'up' && details.delta.dy > 0) {
-                  direction = 'down';
-                } else if (direction != 'down' && details.delta.dy < 0) {
-                  direction = 'up';
+                if (!isPaused) {
+                  if (direction != 'up' && details.delta.dy > 0) {
+                    direction = 'down';
+                  } else if (direction != 'down' && details.delta.dy < 0) {
+                    direction = 'up';
+                  }
                 }
               },
               onHorizontalDragUpdate: (details) {
-                if (direction != 'left' && details.delta.dx > 0) {
-                  direction = 'right';
-                } else if (direction != 'right' && details.delta.dx < 0) {
-                  direction = 'left';
+                if (!isPaused) {
+                  if (direction != 'left' && details.delta.dx > 0) {
+                    direction = 'right';
+                  } else if (direction != 'right' && details.delta.dx < 0) {
+                    direction = 'left';
+                  }
                 }
               },
               child: GridView.builder(
-                physics: NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: numberOfSquares,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 20,
                 ),
                 itemBuilder: (BuildContext context, int index) {
                   if (snakePosition.contains(index)) {
                     return Center(
                       child: Container(
-                        padding: EdgeInsets.all(2),
+                        padding: const EdgeInsets.all(2),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(5),
                           child: Container(
@@ -152,7 +200,7 @@ class _SnakeGameState extends State<SnakeGame> {
                   }
                   if (index == food) {
                     return Container(
-                      padding: EdgeInsets.all(2),
+                      padding: const EdgeInsets.all(2),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(5),
                         child: Container(
@@ -162,7 +210,7 @@ class _SnakeGameState extends State<SnakeGame> {
                     );
                   } else {
                     return Container(
-                      padding: EdgeInsets.all(2),
+                      padding: const EdgeInsets.all(2),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(5),
                         child: Container(
@@ -175,18 +223,22 @@ class _SnakeGameState extends State<SnakeGame> {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 20.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: <Widget>[
-                Text(
-                  'Score: $score',
-                  style: TextStyle(color: Colors.white, fontSize: 20),
+          if (isPaused)
+            Container(
+              color: Colors.black54,
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              child: const Center(
+                child: Text(
+                  'PAUSED',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );
